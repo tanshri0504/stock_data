@@ -10,24 +10,33 @@ from statsmodels.tsa.stattools import adfuller
 # -------------------------------
 # PAGE CONFIG
 # -------------------------------
-st.set_page_config(page_title="📊 Pro Stock Dashboard", layout="wide")
+st.set_page_config(page_title="🌈 Smart Stock Dashboard", layout="wide")
 
 # -------------------------------
-# CUSTOM CSS
+# CUSTOM CSS (COLORFUL UI)
 # -------------------------------
 st.markdown("""
 <style>
-body {background-color: #0E1117;}
-.metric-box {
-    background-color: #1c1f26;
-    padding: 15px;
-    border-radius: 10px;
+body {
+    background: linear-gradient(to right, #141e30, #243b55);
+    color: white;
+}
+.big-title {
+    font-size: 40px;
+    font-weight: bold;
+    color: #00F5A0;
+}
+.card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0px 0px 15px rgba(0,255,255,0.2);
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 Advanced Stock Price Dashboard")
-st.markdown("### Smart Analysis + Forecast + Insights")
+st.markdown('<p class="big-title">🚀 Smart Stock Analytics Dashboard</p>', unsafe_allow_html=True)
+st.markdown("### 📊 AI Insights • 📈 Trends • 🔮 Forecast")
 
 # -------------------------------
 # LOAD DATA
@@ -42,7 +51,7 @@ def load_data():
 df = load_data()
 
 if df is None:
-    st.warning("Upload your dataset")
+    st.warning("⚠️ Upload your dataset")
     file = st.file_uploader("Upload CSV", type=["csv"])
     if file:
         df = pd.read_csv(file)
@@ -56,28 +65,30 @@ df['Date'] = pd.to_datetime(df['Date'])
 df.set_index('Date', inplace=True)
 
 # Sidebar
-st.sidebar.header("⚙️ Settings")
+st.sidebar.header("⚙️ Controls")
 stock = st.sidebar.selectbox("Select Stock", df['stock'].unique())
 
 data = df[df['stock'] == stock][['Close']]
 
 # -------------------------------
-# KPIs
+# KPIs (COLORFUL)
 # -------------------------------
 latest = data['Close'].iloc[-1]
 prev = data['Close'].iloc[-2]
 change = latest - prev
+percent = (change / prev) * 100
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("💰 Price", f"{latest:.2f}")
-col2.metric("📈 Change", f"{change:.2f}")
-col3.metric("📊 % Change", f"{(change/prev)*100:.2f}%")
-col4.metric("📉 Volatility", f"{data['Close'].pct_change().std():.4f}")
+
+col1.markdown(f"<div class='card'>💰 <b>Price</b><br>{latest:.2f}</div>", unsafe_allow_html=True)
+col2.markdown(f"<div class='card'>📈 <b>Change</b><br>{change:.2f}</div>", unsafe_allow_html=True)
+col3.markdown(f"<div class='card'>📊 <b>% Change</b><br>{percent:.2f}%</div>", unsafe_allow_html=True)
+col4.markdown(f"<div class='card'>📉 <b>Volatility</b><br>{data['Close'].pct_change().std():.4f}</div>", unsafe_allow_html=True)
 
 # -------------------------------
-# INTERACTIVE CHART
+# MULTICOLOR LINE CHART
 # -------------------------------
-st.subheader("📊 Interactive Stock Chart")
+st.subheader("🌈 Multicolor Stock Trend")
 
 fig = go.Figure()
 
@@ -86,28 +97,38 @@ fig.add_trace(go.Scatter(
     y=data['Close'],
     mode='lines',
     name='Price',
-    line=dict(width=2)
+    line=dict(color='cyan', width=3)
 ))
 
 # Moving averages
 data['MA20'] = data['Close'].rolling(20).mean()
 data['MA50'] = data['Close'].rolling(50).mean()
 
-fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name='MA20'))
-fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name='MA50'))
+fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name='MA20', line=dict(color='yellow')))
+fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name='MA50', line=dict(color='magenta')))
 
-fig.update_layout(template="plotly_dark", height=500)
+fig.update_layout(
+    template="plotly_dark",
+    title="Stock Price with Moving Averages",
+    height=500
+)
+
 st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------------
-# RETURNS DISTRIBUTION
+# RETURNS HEATMAP STYLE
 # -------------------------------
-st.subheader("📉 Returns Distribution")
+st.subheader("🔥 Returns Distribution")
 
 returns = data['Close'].pct_change().dropna()
 
-fig2 = px.histogram(returns, nbins=50, title="Returns Distribution")
+fig2 = px.histogram(
+    returns,
+    nbins=50,
+    color_discrete_sequence=['#00F5A0']
+)
 fig2.update_layout(template="plotly_dark")
+
 st.plotly_chart(fig2, use_container_width=True)
 
 # -------------------------------
@@ -123,9 +144,9 @@ else:
     st.warning(f"Not Stationary ❌ (p={p_value:.4f})")
 
 # -------------------------------
-# MODEL
+# ARIMA MODEL
 # -------------------------------
-st.subheader("🤖 ARIMA Forecast")
+st.subheader("🤖 Forecast Engine")
 
 model = ARIMA(data['Close'], order=(5,1,0))
 model_fit = model.fit()
@@ -133,49 +154,50 @@ model_fit = model.fit()
 steps = st.slider("Forecast Days", 5, 30, 10)
 forecast = model_fit.forecast(steps=steps)
 
-future_dates = pd.date_range(
-    start=data.index[-1],
-    periods=steps+1,
-    freq='B'
-)[1:]
+future_dates = pd.date_range(start=data.index[-1], periods=steps+1, freq='B')[1:]
 
 # -------------------------------
-# FORECAST PLOT
+# COLORFUL FORECAST GRAPH
 # -------------------------------
+st.subheader("🔮 Future Prediction")
+
 fig3 = go.Figure()
 
 fig3.add_trace(go.Scatter(
     x=data.index,
     y=data['Close'],
-    name="Actual"
+    name="Actual",
+    line=dict(color='cyan')
 ))
 
 fig3.add_trace(go.Scatter(
     x=future_dates,
     y=forecast,
     name="Forecast",
-    line=dict(dash='dash')
+    line=dict(color='red', dash='dash')
 ))
 
 fig3.update_layout(template="plotly_dark", height=500)
+
 st.plotly_chart(fig3, use_container_width=True)
 
 # -------------------------------
-# KEY INSIGHTS
+# KEY INSIGHTS PANEL
 # -------------------------------
-st.subheader("🧠 Key Insights")
+st.subheader("🧠 AI Insights")
 
 trend = "📈 Uptrend" if change > 0 else "📉 Downtrend"
-avg_return = returns.mean()
 risk = returns.std()
+avg_return = returns.mean()
 
 col1, col2, col3 = st.columns(3)
-col1.info(f"Trend: {trend}")
-col2.info(f"Avg Return: {avg_return:.4f}")
-col3.info(f"Risk Level: {risk:.4f}")
+
+col1.success(f"Trend: {trend}")
+col2.info(f"Average Return: {avg_return:.4f}")
+col3.warning(f"Risk Level: {risk:.4f}")
 
 # -------------------------------
-# BUY/SELL SIGNAL (Simple Logic)
+# BUY/SELL SIGNAL
 # -------------------------------
 st.subheader("📢 Trading Signal")
 
@@ -188,4 +210,4 @@ else:
 # FOOTER
 # -------------------------------
 st.markdown("---")
-st.markdown("✨ Pro Dashboard | Streamlit + Plotly + ARIMA")
+st.markdown("🌈 Made with ❤️ | Streamlit + Plotly + ARIMA")
