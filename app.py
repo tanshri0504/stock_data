@@ -1,148 +1,191 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
 import os
-from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import adfuller
 
-# Page config
-st.set_page_config(page_title="📈 Stock Price Predictor", layout="wide")
+# -------------------------------
+# PAGE CONFIG
+# -------------------------------
+st.set_page_config(page_title="📊 Pro Stock Dashboard", layout="wide")
 
-# Custom Styling
+# -------------------------------
+# CUSTOM CSS
+# -------------------------------
 st.markdown("""
-    <style>
-    .main {background-color: #0E1117; color: white;}
-    h1, h2, h3 {color: #00ADB5;}
-    </style>
+<style>
+body {background-color: #0E1117;}
+.metric-box {
+    background-color: #1c1f26;
+    padding: 15px;
+    border-radius: 10px;
+}
+</style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Smart Stock Price Prediction Dashboard")
-st.markdown("AI-powered insights with interactive visualization 🚀")
+st.title("🚀 Advanced Stock Price Dashboard")
+st.markdown("### Smart Analysis + Forecast + Insights")
 
 # -------------------------------
 # LOAD DATA
 # -------------------------------
 @st.cache_data
 def load_data():
-    file_path = "stocks_data.csv"
-    if os.path.exists(file_path):
-        return pd.read_csv(file_path)
+    file = "stocks_data.csv"
+    if os.path.exists(file):
+        return pd.read_csv(file)
     return None
 
 df = load_data()
 
 if df is None:
-    st.warning("⚠️ Upload your stock dataset to continue")
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+    st.warning("Upload your dataset")
+    file = st.file_uploader("Upload CSV", type=["csv"])
+    if file:
+        df = pd.read_csv(file)
     else:
         st.stop()
 
 # -------------------------------
-# PREPROCESSING
+# PREPROCESS
 # -------------------------------
 df['Date'] = pd.to_datetime(df['Date'])
 df.set_index('Date', inplace=True)
 
 # Sidebar
-st.sidebar.header("⚙️ Controls")
-stocks = df['stock'].unique()
-selected_stock = st.sidebar.selectbox("Select Stock", stocks)
+st.sidebar.header("⚙️ Settings")
+stock = st.sidebar.selectbox("Select Stock", df['stock'].unique())
 
-st_data = df[df['stock'] == selected_stock][['Close']]
+data = df[df['stock'] == stock][['Close']]
 
 # -------------------------------
-# METRICS
+# KPIs
 # -------------------------------
-latest_price = st_data['Close'].iloc[-1]
-prev_price = st_data['Close'].iloc[-2]
-change = latest_price - prev_price
+latest = data['Close'].iloc[-1]
+prev = data['Close'].iloc[-2]
+change = latest - prev
 
-col1, col2, col3 = st.columns(3)
-col1.metric("💰 Latest Price", f"{latest_price:.2f}")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("💰 Price", f"{latest:.2f}")
 col2.metric("📈 Change", f"{change:.2f}")
-col3.metric("📊 % Change", f"{(change/prev_price)*100:.2f}%")
+col3.metric("📊 % Change", f"{(change/prev)*100:.2f}%")
+col4.metric("📉 Volatility", f"{data['Close'].pct_change().std():.4f}")
 
 # -------------------------------
-# TREND GRAPH
+# INTERACTIVE CHART
 # -------------------------------
-st.subheader("📉 Stock Trend")
+st.subheader("📊 Interactive Stock Chart")
 
-fig, ax = plt.subplots(figsize=(10,5))
-sns.lineplot(data=st_data, x=st_data.index, y='Close', ax=ax)
-ax.set_title("Stock Price Trend", fontsize=14)
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
-st.pyplot(fig)
+fig = go.Figure()
+
+fig.add_trace(go.Scatter(
+    x=data.index,
+    y=data['Close'],
+    mode='lines',
+    name='Price',
+    line=dict(width=2)
+))
+
+# Moving averages
+data['MA20'] = data['Close'].rolling(20).mean()
+data['MA50'] = data['Close'].rolling(50).mean()
+
+fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name='MA20'))
+fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name='MA50'))
+
+fig.update_layout(template="plotly_dark", height=500)
+st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------------
-# RETURNS
+# RETURNS DISTRIBUTION
 # -------------------------------
-st_data['Returns'] = st_data['Close'].pct_change()
-st_data.dropna(inplace=True)
+st.subheader("📉 Returns Distribution")
+
+returns = data['Close'].pct_change().dropna()
+
+fig2 = px.histogram(returns, nbins=50, title="Returns Distribution")
+fig2.update_layout(template="plotly_dark")
+st.plotly_chart(fig2, use_container_width=True)
 
 # -------------------------------
 # STATIONARITY
 # -------------------------------
-def check_stationarity(series):
-    return adfuller(series.dropna())[1]
+st.subheader("📌 Stationarity Test")
 
-p_value = check_stationarity(st_data['Close'])
+p_value = adfuller(data['Close'].dropna())[1]
 
-st.subheader("📌 Stationarity Analysis")
 if p_value < 0.05:
-    st.success(f"Stationary Data ✅ (p={p_value:.4f})")
+    st.success(f"Stationary ✅ (p={p_value:.4f})")
 else:
     st.warning(f"Not Stationary ❌ (p={p_value:.4f})")
 
 # -------------------------------
 # MODEL
 # -------------------------------
-model = ARIMA(st_data['Close'], order=(5,1,0))
+st.subheader("🤖 ARIMA Forecast")
+
+model = ARIMA(data['Close'], order=(5,1,0))
 model_fit = model.fit()
 
-st.success("🤖 Model trained successfully!")
-
-# -------------------------------
-# FORECAST
-# -------------------------------
-steps = st.slider("Forecast Days", 1, 30, 10)
+steps = st.slider("Forecast Days", 5, 30, 10)
 forecast = model_fit.forecast(steps=steps)
 
-dates = pd.date_range(start=st_data.index[-1], periods=steps+1, freq='B')[1:]
+future_dates = pd.date_range(
+    start=data.index[-1],
+    periods=steps+1,
+    freq='B'
+)[1:]
 
 # -------------------------------
-# FORECAST GRAPH
+# FORECAST PLOT
 # -------------------------------
-st.subheader("🔮 Forecast Visualization")
+fig3 = go.Figure()
 
-fig2, ax2 = plt.subplots(figsize=(10,5))
-ax2.plot(st_data['Close'], label='Actual', linewidth=2)
-ax2.plot(dates, forecast, linestyle='dashed', label='Forecast', linewidth=2)
-ax2.fill_between(dates, forecast, alpha=0.3)
-ax2.set_title("Future Price Prediction")
-ax2.legend()
-st.pyplot(fig2)
+fig3.add_trace(go.Scatter(
+    x=data.index,
+    y=data['Close'],
+    name="Actual"
+))
+
+fig3.add_trace(go.Scatter(
+    x=future_dates,
+    y=forecast,
+    name="Forecast",
+    line=dict(dash='dash')
+))
+
+fig3.update_layout(template="plotly_dark", height=500)
+st.plotly_chart(fig3, use_container_width=True)
 
 # -------------------------------
-# INSIGHTS
+# KEY INSIGHTS
 # -------------------------------
 st.subheader("🧠 Key Insights")
 
-trend = "Upward 📈" if change > 0 else "Downward 📉"
-volatility = st_data['Returns'].std()
+trend = "📈 Uptrend" if change > 0 else "📉 Downtrend"
+avg_return = returns.mean()
+risk = returns.std()
 
-st.write(f"""
-- Current Trend: **{trend}**
-- Volatility (Risk Level): **{volatility:.4f}**
-- Average Return: **{st_data['Returns'].mean():.4f}**
-- Prediction suggests possible future movement based on past data.
-""")
+col1, col2, col3 = st.columns(3)
+col1.info(f"Trend: {trend}")
+col2.info(f"Avg Return: {avg_return:.4f}")
+col3.info(f"Risk Level: {risk:.4f}")
+
+# -------------------------------
+# BUY/SELL SIGNAL (Simple Logic)
+# -------------------------------
+st.subheader("📢 Trading Signal")
+
+if latest > data['MA20'].iloc[-1]:
+    st.success("🟢 BUY Signal (Above MA20)")
+else:
+    st.error("🔴 SELL Signal (Below MA20)")
 
 # -------------------------------
 # FOOTER
 # -------------------------------
 st.markdown("---")
-st.markdown("✨ Designed with Streamlit | Enhanced UI + Insights")
+st.markdown("✨ Pro Dashboard | Streamlit + Plotly + ARIMA")
